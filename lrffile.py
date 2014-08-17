@@ -2,6 +2,7 @@ import struct
 import json
 from cStringIO import StringIO
 import os
+import logging
 
 '''
 The code for this module was strongly based on the following ruby
@@ -29,39 +30,52 @@ class LRFFile:
     data_offset = self.file.tell()
 
     # Iterate through all of the "parts" in the data
+    self.parts = {}
     for index in self.metadata["dataIndex"]:
       key = index['Key']
       offset = index['Value']['offset']
       size = index['Value']['size']
 
       self.file.seek(data_offset + offset)
-      type = self.file.read(1)
-      size = struct.unpack("<L", self.file.read(4))[0]
-      print type
-      print size
+      if key == "stream":
+        self.parts[key] = LRFStream(self.file)
+      else:
+        raise Exception("Unkown key %s in dataIndex list." % key)
 
-      stream_end = self.file.tell() + size - 5
+class LRFStream:
+  def __init__(self, file):
 
-      payload_size = struct.unpack("<L", self.file.read(4))[0]
-      print payload_size
-      assert (payload_size + 4) == (size - 5)
+    self.type = file.read(1).encode("hex")
+    self.size = struct.unpack("<L", file.read(4))[0]
 
-      i = 0
-      while self.file.tell() < stream_end:
-        unk0, uri_size = struct.unpack("<LL", self.file.read(8))
-        #print unk0
-        #print uri_size
-        obj = self.file.read(uri_size)
-        magic = self.file.read(1).encode("hex")
+    if self.type != '4e':
+      raise Exception("Unkown stream type 0x%s" % self.type)
 
-        if magic != '0a':
-          raise Exception("Magic error: expected 0x0a got 0x%s" % magic)
+    print type
+    print self.size
 
-        i = i + 1
-        if i % 2 == 1:
-          print obj
-        #quit()
+    stream_end = file.tell() + self.size - 5
+
+    payload_size = struct.unpack("<L", file.read(4))[0]
+    print payload_size
+    assert (payload_size + 4) == (self.size - 5)
+
+    i = 0
+    while file.tell() < stream_end:
+      unk0, uri_size = struct.unpack("<LL", file.read(8))
+      #print unk0
+      #print uri_size
+      obj = file.read(uri_size)
+      magic = file.read(1).encode("hex")
+
+      if magic != '0a':
+        raise Exception("Magic error: expected 0x0a got 0x%s" % magic)
+
+      i = i + 1
+      if i % 2 == 1:
+        print obj
+      #quit()'''
 
 
 
-LRFFIle("test.lrf")
+LRFFile("test.lrf")
