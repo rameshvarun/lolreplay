@@ -6,7 +6,13 @@ import logging
 import base64
 import gzip
 
+from keyframedata import KeyframeData
+from chunkdata import ChunkData
+
 from Crypto.Cipher import Blowfish
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 """
 The code for this module was strongly based on the following ruby
@@ -100,10 +106,12 @@ class LRFStream:
         # Unzip the data as a gzip file
         gzip_input = StringIO(decrypted)
         gzip_file = gzip.GzipFile(fileobj=gzip_input)
-        response = gzip_file.read()
+        unzipped = gzip_file.read()
 
-      print request
-      print response
+        if "getGameDataChunk" in request:
+          response = ChunkData(unzipped)
+        elif "getKeyFrame" in request:
+          response = KeyframeData(unzipped)
 
 
   def read_segment(self, file):
@@ -120,4 +128,20 @@ class LRFStream:
 
     return segment
 
-LRFFile("test.lrf")
+if __name__ == "__main__":
+  # create console handler and set level to debug
+  ch = logging.StreamHandler()
+  ch.setLevel(logging.DEBUG)
+
+  # create formatter
+  formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+  # add formatter to ch
+  ch.setFormatter(formatter)
+
+  # Add this handler to the loggers
+  logging.getLogger("keyframedata").addHandler(ch)
+  logging.getLogger("__main__").addHandler(ch)
+  logging.getLogger("chunkdata").addHandler(ch)
+
+  LRFFile("test.lrf")
