@@ -8,18 +8,21 @@ import gzip
 
 from Crypto.Cipher import Blowfish
 
-
-'''
+"""
 The code for this module was strongly based on the following ruby
 script by https://github.com/robertabcd
 Script Link: https://github.com/robertabcd/lol-ob/blob/master/lrf.rb
-'''
+"""
 
-'''
-PKCS5 padding formula, from
-https://gist.github.com/crmccreary/5610068
-'''
-unpad = lambda s : s[0:-ord(s[-1])]
+def unpad(s):
+  """
+  PKCS5 padding formula, from
+  https://gist.github.com/crmccreary/5610068
+  The padding is used during to ensure that a byte sequence
+  is a multiple of 8. Because the original data has been padded
+  we must unpad
+  """
+  return s[0:-ord(s[-1])]
 
 
 class LRFFile:
@@ -39,7 +42,11 @@ class LRFFile:
     self.metadata = json.loads(self.file.read(self.meta_size))
     self.gameid = self.metadata['matchID']
 
-    # Cipher required to decrypt data
+    '''
+    To get the actual encryption key, you must decrypt the given
+    encryptionKey, using the gameID as a key. Then, this cipher is
+    used to decrypt chunk and keyframe data
+    '''
     self.encryptedKey = base64.b64decode(self.metadata['encryptionKey'])
 
     gameidCipher = Blowfish.new(str(self.gameid), Blowfish.MODE_ECB)
@@ -63,11 +70,15 @@ class LRFFile:
         raise Exception("Unkown key %s in dataIndex list." % key)
 
 class LRFStream:
+  """Represents a single stream of data in a .lrf file"""
+
   def __init__(self, file, cipher):
 
+    # First byte is the type, next four bytes are the size
     self.type = file.read(1).encode("hex")
     self.size = struct.unpack("<L", file.read(4))[0]
 
+    # The only stream type we know how to decode
     if self.type != '4e':
       raise Exception("Unkown stream type 0x%s" % self.type)
 
@@ -79,20 +90,25 @@ class LRFStream:
 
     # Read segments until the stream is over
     while file.tell() < stream_end:
-      request = self.read_segment(file)
-      response = self.read_segment(file)
-
-      print request
+      request = self.read_segment(file) # The url that was sent to the server
+      response = self.read_segment(file) # The response that the server sent back
 
       if "getGameDataChunk" in request or "getKeyFrame" in request:
+        # Decrypt the data
         decrypted = unpad(cipher.decrypt(response))
-        gzip_input = StringIO(decrypted)
 
+        # Unzip the data as a gzip file
+        gzip_input = StringIO(decrypted)
         gzip_file = gzip.GzipFile(fileobj=gzip_input)
-        unzipped = gzip_file.read()
-        print unzipped
+        response = gzip_file.read()
+
+      print request
+      print response
+
 
   def read_segment(self, file):
+    """Reads one segment of a string"""
+
     unk0, segment_size = struct.unpack("<LL", file.read(8))
     segment = file.read(segment_size)
 
